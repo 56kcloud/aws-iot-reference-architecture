@@ -1,0 +1,82 @@
+name: Reference architecture - destroy infrastructure
+
+# Enable to run this workflow manually
+on: workflow_dispatch
+
+env:
+  # Must be set
+  OIDC_ROLE_AWS: ${{ secrets.OIDC_ROLE_AWS }}
+  REGION: ${{ vars.AWS_REGION }}
+  IAC_STACK_NAME: ${{ vars.IAC_STACK_NAME }}
+  IAC_BUCKET_NAME: ${{ vars.IAC_BUCKET_NAME }}
+  CERT_BUCKET_NAME: ${{ vars.CERT_BUCKET_NAME }}
+  IMAGE_BUCKET_NAME: ${{ vars.IMAGE_BUCKET_NAME }}
+  # Optional
+  THING_POLICY_NAME: GreengrassV2IoTThingPolicy
+  # Don't change
+  provisioning-directory: ./cloud-infrastructure
+
+jobs:
+  # Destroy infrastructure
+  destroy-infra:
+    name: Destroy infrastructure
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.provisioning-directory }}
+    env:
+      PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.OIDC_ROLE_AWS }}  # This is required for requesting the JWT
+          aws-region: ${{ env.REGION }}             # This is required for actions/checkout
+
+      - name: Empty ${{ env.IMAGE_BUCKET_NAME }} bucket
+        run: |
+          if aws s3api head-bucket --bucket ${{ env.IMAGE_BUCKET_NAME }} 2> /dev/null; then
+            aws s3 rm s3://${{ env.IMAGE_BUCKET_NAME }} --recursive
+          else
+            echo "Bucket does not exist."
+          fi
+
+      - name: Empty ${{ env.CERT_BUCKET_NAME }} bucket
+        run: |
+          if aws s3api head-bucket --bucket ${{ env.CERT_BUCKET_NAME }} 2> /dev/null; then
+            aws s3 rm s3://${{ env.CERT_BUCKET_NAME }}/config_parameters.txt
+            aws s3 rm s3://${{ env.CERT_BUCKET_NAME }}/allowlist.txt
+          else
+            echo "Bucket does not exist."
+          fi
+
+      - name: Detach thing policy from certificates
+        run: |
+          certificates_arn=$(aws iot list-certificates --output text --no-paginate --query "certificates[].certificateArn")
+          for certificate_arn in $certificates_arn; do
+            aws iot detach-policy --policy-name ${{ env.THING_POLICY_NAME }} --target $certificate_arn
+          done
+
+      - name: Pulumi Login
+        run: pulumi login --cloud-url s3://${{ env.IAC_BUCKET_NAME }}
+
+      - name: Destroy infrastructure
+        run: pulumi destroy -s ${{ env.IAC_STACK_NAME }} --yes
+
+      - name: Pulumi remove stack
+        run: pulumi stack rm ${{ env.IAC_STACK_NAME }} --yes
+
+      - name: Delete S3 bucket from Pulumi stack
+        run: |
+          if aws s3api head-bucket --bucket ${{ env.IAC_BUCKET_NAME }} 2> /dev/null; then
+            aws s3 rm s3://${{ env.IAC_BUCKET_NAME }} --recursive
+            aws s3api delete-bucket --bucket ${{ env.IAC_BUCKET_NAME }}
+          else
+            echo "Bucket does not exist."
+          fi

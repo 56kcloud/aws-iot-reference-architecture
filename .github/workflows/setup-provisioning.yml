@@ -1,0 +1,130 @@
+name: Reference architecture - setup provisioning
+
+# Only trigger, when the test workflow succeeded
+on: 
+  workflow_run:
+    workflows: ["Reference architecture - deploy infrastructure"]
+    types:
+      - completed
+
+env:
+  # Must be set
+  OIDC_ROLE_AWS: ${{ secrets.OIDC_ROLE_AWS }}
+  REGION: ${{ vars.AWS_REGION }}
+  CERT_BUCKET_NAME: ${{ vars.CERT_BUCKET_NAME }}
+  # Optional
+  THING_GROUP_NAME: GreengrassGroup
+  TES_ROLE_ALIAS_NAME: GreengrassCoreTokenExchangeRoleAlias
+  THING_POLICY_NAME: GreengrassV2IoTThingPolicy
+  FLEET_TEMPLATE_NAME: GreengrassFleetProvisioningTemplate
+  # Don't change
+  provisioning-directory: ./cloud-infrastructure
+
+jobs:
+  # Prepare provisioning
+  prepare-provisioning:
+    name: Setup provisioning
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    defaults:
+      run:
+        working-directory: ${{ env.provisioning-directory }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.OIDC_ROLE_AWS }}  # This is required for requesting the JWT
+          aws-region: ${{ env.REGION }}             # This is required for actions/checkout
+
+      - name: Get IoT data endpoint
+        id: data_endpoint_id
+        run: |
+          iot_data_endpoint=$(aws iot describe-endpoint --endpoint-type iot:Data-ATS --output text --no-paginate --query "endpointAddress")
+          echo "iot_data_endpoint=$iot_data_endpoint" >> $GITHUB_OUTPUT
+
+      - name: Get IoT credentials endpoint
+        id: credentials_endpoint_id
+        run: |
+          iot_credentials_endpoint=$(aws iot describe-endpoint --endpoint-type iot:CredentialProvider --output text --no-paginate --query "endpointAddress")
+          echo "iot_credentials_endpoint=$iot_credentials_endpoint" >> $GITHUB_OUTPUT
+
+      - name: Save variables in a config file and push it to storage
+        id: set_vars_id
+        env:
+          iot_data_endpoint: ${{ steps.data_endpoint_id.outputs.iot_data_endpoint }}
+          iot_credentials_endpoint: ${{ steps.credentials_endpoint_id.outputs.iot_credentials_endpoint }}
+        run: |
+          config_file=config_parameters.txt
+          echo ${{ env.REGION }} > $config_file
+          echo $iot_data_endpoint >> $config_file
+          echo $iot_credentials_endpoint >> $config_file
+          echo ${{ env.TES_ROLE_ALIAS_NAME }} >> $config_file
+          echo ${{ env.FLEET_TEMPLATE_NAME }} >> $config_file
+          
+          aws s3 cp $config_file s3://${{ env.CERT_BUCKET_NAME }}/
+
+      - name: Push allowlist
+        run: aws s3 cp allowlist.txt s3://${{ env.CERT_BUCKET_NAME }}/
+
+  # Check devices
+  check-devices:
+    name: Check devices
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    defaults:
+      run:
+        working-directory: ${{ env.provisioning-directory }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.OIDC_ROLE_AWS }}  # This is required for requesting the JWT
+          aws-region: ${{ env.REGION }}             # This is required for actions/checkout
+
+      - name: Check allowlist to remove existing devices but deleted from allowlist
+        run: |
+          things_name=$(aws iot list-things --output text --no-paginate --query "things[].thingName")
+          allows_name=$(cat allowlist.txt)
+          for thing_name in $things_name; do
+            thing_exist=0
+            for allow_name in $allows_name; do
+              trimmed_allow_name=$(echo "$allow_name" | tr -d '[:space:]')
+              if [ $thing_name = $trimmed_allow_name ]; then
+                thing_exist=1
+              fi
+            done
+        
+            if [ $thing_exist -eq 0 ] ; then
+              certificate_arn=$(aws iot list-thing-principals --thing-name $thing_name --output text --no-paginate --query "principals[]")
+              certificate_id=${certificate_arn##*/}
+              aws iot detach-thing-principal --thing-name $thing_name --principal $certificate_arn
+              aws iot detach-policy --policy-name ${{ env.THING_POLICY_NAME }} --target $certificate_arn
+              aws iot update-certificate --certificate-id $certificate_id --new-status REVOKED
+              aws iot delete-certificate --certificate-id $certificate_id
+              aws iot delete-thing --thing-name $thing_name
+              aws greengrassv2 delete-core-device --core-device-thing-name $thing_name
+              echo "Remove $thing_name from AWS IoT"
+            fi
+          done
+
+      - name: Attach existing things autorised to thing group and attach the policy to them by certificate's things
+        run: |
+          things_name=$(aws iot list-things --output text --no-paginate --query "things[].thingName")
+          for thing_name in $things_name; do
+            echo "Attach $thing_name to ${{ env.THING_GROUP_NAME }} with ${{ env.THING_POLICY_NAME }} policy."
+            aws iot add-thing-to-thing-group --thing-group-name ${{ env.THING_GROUP_NAME }} --thing-name $thing_name
+            certificate_arn=$(aws iot list-thing-principals --thing-name $thing_name --output text --no-paginate --query "principals[]")
+            aws iot attach-policy --policy-name ${{ env.THING_POLICY_NAME }} --target $certificate_arn
+          done

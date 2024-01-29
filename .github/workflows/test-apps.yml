@@ -1,0 +1,123 @@
+name: Greengrass components - tests
+
+# Only trigger, when the test workflow succeeded
+on: 
+  workflow_run:
+    workflows: ["Reference architecture - deploy infrastructure"]
+    types:
+      - completed
+
+env:
+  # Don't change
+  applications-directory: ./greengrass-components/applications
+
+jobs:
+  linting:
+    name: Linting
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    defaults:
+      run:
+        working-directory: ${{ env.applications-directory }}
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: python3 -m pip install ruff==0.1.13
+
+      - name: Lint led app with Ruff
+        run: |
+          cd docker_led/led_app
+          ruff --output-format=github .
+
+      - name: Lint button app with Ruff
+        run: |
+          cd docker_button/button_app
+          ruff --output-format=github .
+
+      - name: Lint certificate rotator app with Ruff
+        run: |
+          cd docker_certificate_rotator/certificate_rotator_app
+          ruff --output-format=github .
+
+  # Static application security testing with Bandit
+  sast-app-test:
+    name: SAST (applications)
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    defaults:
+      run:
+        working-directory: ${{ env.applications-directory }}
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: python3 -m pip install -U bandit
+
+      - name: scan vulnerabilities in led app
+        run: bandit -r docker_led/led_app -f screen
+
+      - name: scan vulnerabilities in button app
+        run: bandit -r docker_button/button_app -f screen
+
+      - name: scan vulnerabilities in certificate rotator app
+        run: bandit -r docker_certificate_rotator/certificate_rotator_app -f screen
+
+  # Applications behaviour testing
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    defaults:
+      run:
+        working-directory: ${{ env.applications-directory }}
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: python3 -m pip install -U coverage pytest pytest-mock awsiotsdk fake_rpi
+
+      - name: Test led app with coverage report
+        run: |
+          cd docker_led/led_app
+          coverage run -m pytest -v
+          coverage report -m pubsub/*.py led/*.py
+          coverage html -d coverage_html pubsub/*.py led/*.py
+
+      - name: Get cover of led app
+        uses: actions/upload-artifact@v4
+        with:
+          name: led_coverage_html
+          path: |
+            ${{ env.applications-directory }}/docker_led/led_app/coverage_html
+
+      - name: Test button app with coverage report
+        run: |
+          cd docker_button/button_app
+          coverage run -m pytest -v
+          coverage report -m pub/*.py button/*.py
+          coverage html -d coverage_html pub/*.py button/*.py
+
+      - name: Get cover of button app
+        uses: actions/upload-artifact@v4
+        with:
+          name: button_coverage_html
+          path: |
+            ${{ env.applications-directory }}/docker_button/button_app/coverage_html
+
+      - name: Test certificate rotator app with coverage report
+        run: |
+          cd docker_certificate_rotator/certificate_rotator_app
+          coverage run -m pytest -v
+          coverage report -m pubsub/*.py certificate_rotator/*.py
+          coverage html -d coverage_html pubsub/*.py certificate_rotator/*.py
+
+      - name: Get cover of certificate rotator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: certificate_rotator_coverage_html
+          path: |
+            ${{ env.applications-directory }}/docker_certificate_rotator/certificate_rotator_app/coverage_html

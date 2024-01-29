@@ -1,0 +1,2 @@
+awsiotsdk==1.21.0
+cryptography==41.0.7

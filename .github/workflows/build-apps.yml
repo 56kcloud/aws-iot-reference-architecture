@@ -1,0 +1,116 @@
+name: Greengrass components - build
+
+# Only trigger, when the test workflow succeeded
+on: 
+  workflow_run:
+    workflows: ["Greengrass components - tests"]
+    types:
+      - completed
+
+env:
+  # Must be set
+  OIDC_ROLE_AWS: ${{ secrets.OIDC_ROLE_AWS }}
+  REGION: ${{ vars.AWS_REGION }}
+  # Don't change
+  components-directory: ./greengrass-components/components
+  applications-directory: ./greengrass-components/applications
+
+jobs:
+  # Publish the updated component on AWS IoT if necessary
+  publish:
+    name: Create and publish components
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.head_ref }} # Get head reference to compare commits
+      
+      - name: Build applications
+        run: echo "Building source images and containers..."
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.OIDC_ROLE_AWS }}  # This is required for requesting the JWT
+          aws-region: ${{ env.REGION }}             # This is required for actions/checkout
+
+      - name: Docker version
+        run: docker version
+
+      - name: Docker build and push
+        id: docker-build-push
+        run: |
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --output text --no-paginate --query 'Account')
+          CHANGED_APPS=$(git diff --name-only HEAD~1 HEAD | grep "^greengrass-components/applications/" | cut -d '/' -f 3)
+
+          # Remove occurrences
+          CHANGED_APPS=$(echo "$CHANGED_APPS" | xargs -n1 | sort -u | xargs)
+          echo "Applications changed -> $CHANGED_APPS"
+
+          for app in $CHANGED_APPS
+          do
+            cd $app
+            echo "Building $app ..."
+            docker build --no-cache -t $app .
+            aws ecr create-repository --repository-name ${app}_repository --region ${{ env.REGION }}  || true
+            docker tag $app ${AWS_ACCOUNT_ID}.dkr.ecr.${{ env.REGION }}.amazonaws.com/${app}_repository
+            aws ecr get-login-password --region ${{ env.REGION }} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${{ env.REGION }}.amazonaws.com
+            echo "Push $app ..."
+            docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${{ env.REGION }}.amazonaws.com/${app}_repository
+            cd ..
+          done
+
+        working-directory: ${{ env.applications-directory }}
+      
+      - name: Build components
+        run: echo "Building components..."
+
+      - name: Install Greengrass Development Kit
+        run: python3 -m pip install -U git+https://github.com/aws-greengrass/aws-greengrass-gdk-cli.git@v1.6.0
+
+      - name: GDK build and publish
+        id: gdk-build-publish
+        run: |
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --output text --no-paginate --query 'Account')
+          CHANGED_APPS=$(git diff --name-only HEAD~1 HEAD | grep "^greengrass-components/applications/" | cut -d '/' -f 3)
+          CHANGED_COMPONENTS=$(git diff --name-only HEAD~1 HEAD | grep "^greengrass-components/components/" | grep -v "^greengrass-components/components/deployment.json.template" | cut -d '/' -f 3)
+          # Build and push once per component
+          CHANGED=$(echo "$CHANGED_APPS $CHANGED_COMPONENTS")
+          CHANGED=$(echo "$CHANGED" | xargs -n1 | sort -u | xargs)
+
+          echo "Components changed -> $CHANGED_COMPONENTS"
+          echo "Changed -> $CHANGED"
+
+          for component in $CHANGED
+          do
+            cd $component
+            digest=$(aws ecr describe-images \
+              --output text \
+              --no-paginate \
+              --repository-name ${component}_repository \
+              --image-ids imageTag=latest \
+              --query 'imageDetails[0].imageDigest' \
+              || true)
+            sed -i "s/COMPONENT_NAME/$component/g" recipe.yaml
+            sed -i "s/COMPONENT_NAME/$component/g" gdk-config.json
+            sed -i "s/AWS_REGION/${{ env.REGION }}/g" recipe.yaml
+            sed -i "s/AWS_REGION/${{ env.REGION }}/g" gdk-config.json
+            sed -i "s/AWS_ACCOUNT_ID/${AWS_ACCOUNT_ID}/g" recipe.yaml
+            sed -i "s/DIGEST/$digest/g" recipe.yaml
+            
+            echo "Building $component ..."
+            gdk component build
+            echo "Publishing $component ..."
+            gdk component publish
+            cd ..
+
+            echo "CHANGED_COMPONENTS=true" >> "$GITHUB_OUTPUT"
+          done
+
+        working-directory: ${{ env.components-directory }}

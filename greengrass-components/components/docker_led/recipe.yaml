@@ -1,0 +1,64 @@
+---
+RecipeFormatVersion: "2020-01-25"
+ComponentName: "COMPONENT_NAME"
+ComponentVersion: "{COMPONENT_VERSION}"
+ComponentDescription: "This is LED application component written in Python that run in Docker container."
+ComponentPublisher: "{COMPONENT_AUTHOR}"
+ComponentConfiguration:
+  DefaultConfiguration:
+    frequency: 1
+    lambda_frequency_topic: "lambda/+/frequency"
+    lambda_button_topic: "lambda/+/button"
+    device_frequency_topic: "device/+/frequency"
+    device_button_topic: "device/button"
+    accessControl:
+      aws.greengrass.ipc.pubsub:
+        com.LedApp:pubsub:1:
+          policyDescription: "Allows access to subscribe to input topics at local level."
+          operations:
+            - "aws.greengrass#SubscribeToTopic"
+          resources:
+            - "device/button"
+      aws.greengrass.ipc.mqttproxy:
+        com.LedApp:mqttproxy:1:
+          policyDescription: "Allows access to subscribe to input topics."
+          operations:
+            - "aws.greengrass#SubscribeToIoTCore"
+          resources:
+            - "device/+/frequency"
+        com.LedApp:mqttproxy:2:
+          policyDescription: "Allows access to publish to output topics."
+          operations:
+            - "aws.greengrass#PublishToIoTCore"
+          resources:
+            - "lambda/+/frequency"
+            - "lambda/+/button"
+ComponentDependencies:
+  aws.greengrass.DockerApplicationManager:
+    VersionRequirement: ~2.0.0
+  aws.greengrass.TokenExchangeService:
+    VersionRequirement: ~2.0.0
+Manifests:
+  - Platform:
+      os: linux
+      architecture: aarch64
+    Lifecycle:
+      run: 
+        RequiresPrivilege: true
+        Script: |-
+          docker stop COMPONENT_NAME || true
+          docker rm COMPONENT_NAME || true
+          docker run --name COMPONENT_NAME \
+            -e LAMBDA_FREQUENCY_TOPIC=\"{configuration:/lambda_frequency_topic}\" \
+            -e LAMBDA_BUTTON_TOPIC=\"{configuration:/lambda_button_topic}\" \
+            -e DEVICE_FREQUENCY_TOPIC=\"{configuration:/device_frequency_topic}\" \
+            -e DEVICE_BUTTON_TOPIC=\"{configuration:/device_button_topic}\" \
+            -e FREQUENCY=\"{configuration:/frequency}\" \
+            -e SVCUID \
+            -e AWS_GG_NUCLEUS_DOMAIN_SOCKET_FILEPATH_FOR_COMPONENT \
+            -v $AWS_GG_NUCLEUS_DOMAIN_SOCKET_FILEPATH_FOR_COMPONENT:$AWS_GG_NUCLEUS_DOMAIN_SOCKET_FILEPATH_FOR_COMPONENT \
+            --device /dev/gpiomem \
+            --privileged \
+            AWS_ACCOUNT_ID.dkr.ecr.AWS_REGION.amazonaws.com/COMPONENT_NAME_repository@DIGEST
+    Artifacts:
+      - URI: "docker:AWS_ACCOUNT_ID.dkr.ecr.AWS_REGION.amazonaws.com/COMPONENT_NAME_repository:latest"

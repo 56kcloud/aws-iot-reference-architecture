@@ -1,0 +1,3 @@
+name: iot-ref-arch
+runtime: python
+description: IaC for the IoT reference architecture

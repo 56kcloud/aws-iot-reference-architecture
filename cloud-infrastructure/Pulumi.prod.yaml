@@ -1,0 +1,3 @@
+config:
+  iot-ref-arch:aws-account-id: 987039686874
+  iot-ref-arch:aws-region: eu-central-1

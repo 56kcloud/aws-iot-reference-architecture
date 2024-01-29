@@ -1,0 +1,16 @@
+{
+  "component": {
+    "COMPONENT_NAME": {
+      "author": "Kevax24",
+      "version": "NEXT_PATCH",
+      "build": {
+        "build_system": "zip"
+      },
+      "publish": {
+        "bucket": "greengrass_components_repository",
+        "region": "AWS_REGION"
+      }
+    }
+  },
+  "gdk_version": "1.0.0"
+}

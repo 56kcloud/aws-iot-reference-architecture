@@ -1,0 +1,148 @@
+name: Reference architecture - deploy infrastructure
+
+on:
+  workflow_dispatch:  # Enable to run this workflow manually
+  push:
+    branches:
+      - main
+
+env:
+  # Must be set
+  OIDC_ROLE_AWS: ${{ secrets.OIDC_ROLE_AWS }}
+  REGION: ${{ vars.AWS_REGION }}
+  IAC_STACK_NAME: ${{ vars.IAC_STACK_NAME }}
+  IAC_BUCKET_NAME: ${{ vars.IAC_BUCKET_NAME }}
+  CERT_BUCKET_NAME: ${{ vars.CERT_BUCKET_NAME }}
+  IMAGE_BUCKET_NAME: ${{ vars.IMAGE_BUCKET_NAME }}
+  # Optional
+  THING_GROUP_NAME: GreengrassGroup
+  TES_ROLE_NAME: GreengrassV2TokenExchangeRole
+  TES_POLICY_NAME: GreengrassV2TokenExchangeRoleAccess
+  TES_ROLE_ALIAS_NAME: GreengrassCoreTokenExchangeRoleAlias
+  THING_POLICY_NAME: GreengrassV2IoTThingPolicy
+  HOOK_ROLE_NAME: PreProvisioningHookRole
+  HOOK_POLICY_NAME: PreProvisioningHookPolicy
+  HOOK_FCT_NAME: PreProvisioningHookFunction
+  FLEET_ROLE_NAME: GreengrassFleetProvisioningRole
+  FLEET_TEMPLATE_NAME: GreengrassFleetProvisioningTemplate
+  CLAIM_POLICY_NAME: GreengrassProvisioningClaimPolicy
+  AUDIT_ACTION_ROLE_NAME: IoTDeviceDefenderAuditActionsRole
+  AUDIT_ACTION_POLICY_NAME: IoTDeviceDefenderAuditActionsPolicy
+  AUDIT_ACTION_FCT_NAME: IoTDeviceDefenderAuditActionsFunction
+  AUDIT_ROLE_NAME: IoTDeviceDefenderAuditRole
+  AUDIT_POLICY_NAME: IoTDeviceDefenderAuditPolicy
+  ROTATE_CERT_ROLE_NAME: IoTDeviceDefenderRotateCertRole
+  ROTATE_CERT_POLICY_NAME: IoTDeviceDefenderRotateCertPolicy
+  ROTATE_CERT_FCT_NAME: IoTDeviceDefenderRotateCert
+  CSR_TRIGGER_RULE_NAME: CsrTrigger
+  REVOKE_CERT_ROLE_NAME: IoTDeviceDefenderRevokeCertRole
+  REVOKE_CERT_POLICY_NAME: IoTDeviceDefenderRevokeCertPolicy
+  REVOKE_CERT_FCT_NAME: IoTDeviceDefenderRevokeCert
+  CRT_ACK_TRIGGER_RULE_NAME: CrtAckTrigger
+  SNS_TOPIC_NAME: device_certificate_expiring
+  # Don't change
+  provisioning-directory: ./cloud-infrastructure
+
+jobs:
+  # Prepare infrastructure
+  prepare-infra:
+    name: Setup infrastructure
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.OIDC_ROLE_AWS }}  # This is required for requesting the JWT
+          aws-region: ${{ env.REGION }}             # This is required for actions/checkout
+
+      - name: Create S3 bucket for claim certificate
+        run: |
+          if aws s3api head-bucket --bucket ${{ env.CERT_BUCKET_NAME }} 2> /dev/null; then
+            echo "Bucket exists."
+          else
+            echo "Bucket does not exist."
+            aws s3api create-bucket --acl private --create-bucket-configuration LocationConstraint=${{ env.REGION }} --bucket ${{ env.CERT_BUCKET_NAME }}
+          fi
+
+      - name: Create claim certificate
+        working-directory: ${{ env.provisioning-directory }}
+        run: |
+          if aws s3api head-object --bucket ${{ env.CERT_BUCKET_NAME }} --key "claim.pem.crt" 2> /dev/null; then
+            echo "Claim certificate exists."
+          else
+            echo "Claim certificate does not exist."
+            certificate_arn=$(aws iot create-keys-and-certificate \
+              --certificate-pem-outfile "claim.pem.crt" \
+              --public-key-outfile "claim.public.pem.key" \
+              --private-key-outfile "claim.private.pem.key" \
+              --set-as-active \
+              --output text --no-paginate --query "certificateArn")
+            echo $certificate_arn > claim_certificate.arn
+
+            aws s3 cp claim.pem.crt s3://${{ env.CERT_BUCKET_NAME }}/
+            aws s3 cp claim.private.pem.key s3://${{ env.CERT_BUCKET_NAME }}/
+            aws s3 cp claim_certificate.arn s3://${{ env.CERT_BUCKET_NAME }}/
+          fi
+
+      - name: Create S3 bucket for Pulumi stack
+        run: |
+          if aws s3api head-bucket --bucket ${{ env.IAC_BUCKET_NAME }} 2> /dev/null; then
+            echo "Bucket exists."
+          else
+            echo "Bucket does not exist."
+            aws s3api create-bucket --acl private --create-bucket-configuration LocationConstraint=${{ env.REGION }} --bucket ${{ env.IAC_BUCKET_NAME }}
+          fi
+
+  # Deploy infrastructure
+  deploy-infra:
+    name: Deploy infrastructure
+    runs-on: ubuntu-latest
+    needs: prepare-infra
+    defaults:
+      run:
+        working-directory: ${{ env.provisioning-directory }}
+    env:
+      PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.OIDC_ROLE_AWS }}  # This is required for requesting the JSON Web Tocken (JWT)
+          aws-region: ${{ env.REGION }}             # This is required for actions/checkout
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installing dependencies 📦️
+        run: pip install -r requirements.txt
+
+      - name: Get claim certificate ARN
+        run: |
+          aws s3 cp s3://${{ env.CERT_BUCKET_NAME }}/claim_certificate.arn claim_certificate.arn
+          echo "CLAIM_CERTIFICATE_ARN=$(cat claim_certificate.arn)" >> $GITHUB_ENV
+
+      - name: Set up Pulumi
+        uses: pulumi/actions@v4
+
+      - name: Pulumi Login
+        run: pulumi login --cloud-url s3://${{ env.IAC_BUCKET_NAME }}
+
+      - name: Pulumi stack init
+        run: pulumi stack init ${{ env.IAC_STACK_NAME }} || true
+
+      - name: Deploy infrastructure
+        run: pulumi up -s ${{ env.IAC_STACK_NAME }} --yes

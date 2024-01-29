@@ -1,0 +1,25 @@
+---
+RecipeFormatVersion: "2020-01-25"
+ComponentName: "COMPONENT_NAME"
+ComponentVersion: "{COMPONENT_VERSION}"
+ComponentDescription: "This is a corrupt Docker container."
+ComponentPublisher: "{COMPONENT_AUTHOR}"
+ComponentDependencies:
+  aws.greengrass.DockerApplicationManager:
+    VersionRequirement: ~2.0.0
+  aws.greengrass.TokenExchangeService:
+    VersionRequirement: ~2.0.0
+Manifests:
+  - Platform:
+      os: linux
+      architecture: aarch64
+    Lifecycle:
+      run: 
+        RequiresPrivilege: true
+        Script: |-
+          docker stop COMPONENT_NAME || true
+          docker rm COMPONENT_NAME || true
+          docker run --name COMPONENT_NAME \
+          AWS_ACCOUNT_ID.dkr.ecr.AWS_REGION.amazonaws.com/COMPONENT_NAME_repository@DIGEST
+    Artifacts:
+      - URI: "docker:AWS_ACCOUNT_ID.dkr.ecr.AWS_REGION.amazonaws.com/COMPONENT_NAME_repository:latest"

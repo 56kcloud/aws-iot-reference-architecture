@@ -1,0 +1,51 @@
+name: Reference architecture - custom os image
+
+# Only trigger, when the test workflow succeeded
+on: 
+  workflow_run:
+    workflows: ["Reference architecture - setup provisioning"]
+    types:
+      - completed
+
+env:
+  # Must be set
+  OIDC_ROLE_AWS: ${{ secrets.OIDC_ROLE_AWS }}
+  REGION: ${{ vars.AWS_REGION }}
+  CERT_BUCKET_NAME: ${{ vars.CERT_BUCKET_NAME }}
+  IMAGE_BUCKET_NAME: ${{ vars.IMAGE_BUCKET_NAME }}
+  # Don't change
+  image-directory: ./os-image
+
+jobs:
+  # Build custom OS image
+  build-image:
+    name: Build custom OS image
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    defaults:
+      run:
+        working-directory: ${{ env.image-directory }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.OIDC_ROLE_AWS }}  # This is required for requesting the JWT
+          aws-region: ${{ env.REGION }}             # This is required for actions/checkout
+
+      - name: Get certificate, key and config parameters
+        run: |
+          aws s3 cp s3://${{ env.CERT_BUCKET_NAME }}/config_parameters.txt config_parameters.txt
+          aws s3 cp s3://${{ env.CERT_BUCKET_NAME }}/claim.pem.crt claim.pem.crt
+          aws s3 cp s3://${{ env.CERT_BUCKET_NAME }}/claim.private.pem.key claim.private.pem.key
+
+      - name: Build custom OS image
+        run: docker run --rm --privileged -v /dev:/dev -v ${PWD}:/build mkaczanowski/packer-builder-arm:latest build raspios-lite.json
+
+      - name: Push custom OS image to storage
+        run: aws s3 cp raspios-lite.img s3://${{ env.IMAGE_BUCKET_NAME }}/

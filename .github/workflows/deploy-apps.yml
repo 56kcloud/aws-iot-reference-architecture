@@ -1,0 +1,84 @@
+name: Greengrass components - deploy
+
+# Only trigger, when the test workflow succeeded
+on: 
+  workflow_run:
+    workflows: ["Greengrass components - build"]
+    types:
+      - completed
+
+env:
+  # Must be setup
+  OIDC_ROLE_AWS: ${{ secrets.OIDC_ROLE_AWS }}
+  REGION: ${{ vars.AWS_REGION }}
+  # Optional
+  THING_GROUP_NAME: GreengrassGroup
+  # Don't change
+  components-directory: ./greengrass-components/components
+
+jobs:
+  # Deploy the updated component on the device if necessary
+  deploy:
+    name: Component deploy
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.head_ref }} # Get head reference to compare commits
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.OIDC_ROLE_AWS }}  # This is required for requesting the JWT
+          aws-region: ${{ env.REGION }}             # This is required for actions/checkout
+
+      - name: "Install dependencies"
+        run: sudo apt-get install jq
+
+      - name: Deploy Greengrass components on the device
+        run: |
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --output text --no-paginate --query 'Account')
+
+          cli_version=$(aws greengrassv2 list-component-versions \
+            --output text \
+            --no-paginate \
+            --arn arn:aws:greengrass:${{ env.REGION }}:aws:components:aws.greengrass.Cli \
+            --query "componentVersions[0].componentVersion")
+
+          export CLI_VERSION=$cli_version
+          export AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID
+          export AWS_REGION=${{ env.REGION }}
+          export THING_GROUP=${{ env.THING_GROUP_NAME }}
+          envsubst < "deployment.json.template" > "deployment.json"
+
+          COMPONENTS=$(find . -maxdepth 1 -type d -not -name '.*' -exec basename {} \;)
+
+          for component in $COMPONENTS
+          do
+            version=$(aws greengrassv2 list-component-versions \
+              --output text \
+              --no-paginate \
+              --arn arn:aws:greengrass:${{ env.REGION }}:${AWS_ACCOUNT_ID}:components:${component} \
+              --query "componentVersions[0].componentVersion")
+
+            # Update JSON using jq
+            jq --arg name "$component" \
+              --arg version "$version" \
+              --arg reset """" \
+              '.components += { ($name): { "componentVersion": $version, "configurationUpdate": { "reset": [$reset] } } }' \
+              "deployment.json" > tmp.json && mv tmp.json "deployment.json"
+          done
+          
+          # deploy
+          aws greengrassv2 create-deployment \
+            --cli-input-json file://deployment.json \
+            --region ${{ env.REGION }}
+          echo "Deployment finished!"
+          
+        working-directory: ${{ env.components-directory }}

@@ -1,0 +1,230 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": [
+                "s3:ListBucket",
+                "s3:CreateBucket",
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject",
+                "s3:DeleteBucket"
+            ],
+            "Resource": "arn:aws:s3:::*",
+            "Effect": "Allow"
+        },
+        {
+            "Action": [
+                "cloudformation:CreateResource",
+                "cloudformation:GetResourceRequestStatus",
+                "cloudformation:GetResource",
+                "cloudformation:DeleteResource",
+                "cloudformation:UpdateResource",
+                "iot:CreateKeysAndCertificate",
+                "iot:ListCertificates",
+                "iot:DescribeEndpoint",
+                "iot:ListThings",
+                "iot:ListThingPrincipals",
+                "iot:ListAttachedPolicies",
+                "iot:DescribeAccountAuditConfiguration",
+                "iot:DeleteAccountAuditConfiguration",
+                "iot:UpdateAccountAuditConfiguration",
+                "iot:DetachThingPrincipal",
+                "ecr:CreateRepository",
+                "ecr:GetAuthorizationToken",
+                "greengrass:CreateDeployment"
+            ],
+            "Resource": "*",
+            "Effect": "Allow"
+        },
+        {
+            "Action": [
+                "iam:GetRole",
+                "iam:CreateRole",
+                "iam:AttachRolePolicy",
+                "iam:ListAttachedRolePolicies",
+                "iam:ListRolePolicies",
+                "iam:GetRolePolicy",
+                "iam:PutRolePolicy",
+                "iam:DetachRolePolicy",
+                "iam:DeleteRolePolicy",
+                "iam:DeleteRole",
+                "iam:UpdateRole",
+                "iam:UpdateRoleDescription",
+                "iam:UpdateAssumeRolePolicy"
+            ],
+            "Resource": "arn:aws:iam::${AWS::AccountId}:role/*",
+            "Effect": "Allow"
+        },
+        {
+            "Action": [
+                "iam:PassRole"
+            ],
+            "Resource": "arn:aws:iam::${AWS::AccountId}:role/*",
+            "Effect": "Allow",
+            "Condition": {
+                "StringEquals": {
+                    "iam:PassedToService": [
+                        "iot.amazonaws.com",
+                        "lambda.amazonaws.com"
+                    ]
+                },
+                "StringLike": {
+                    "iam:AssociatedResourceARN": [
+                        "*"
+                    ]
+                }
+            }
+        },
+        {
+            "Action": [
+                "iot:AddThingToThingGroup",
+                "iot:DeleteThing"
+            ],
+            "Resource": "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:thing/*",
+            "Effect": "Allow"
+        },
+        {
+            "Action": [
+                "iot:DescribeThingGroup",
+                "iot:CreateThingGroup",
+                "iot:DeleteThingGroup",
+                "iot:AddThingToThingGroup",
+                "iot:UpdateThingGroup",
+                "iot:CreateJob"
+            ],
+            "Resource": "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:thinggroup/*",
+            "Effect": "Allow"
+        },
+        {
+            "Action": [
+                "iot:CreateRoleAlias",
+                "iot:DescribeRoleAlias",
+                "iot:ListTagsForResource",
+                "iot:DeleteRoleAlias",
+                "iot:UpdateRoleAlias"
+            ],
+            "Resource": "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:rolealias/*",
+            "Effect": "Allow"
+        },
+        {
+            "Action": [
+                "iot:CreatePolicy",
+                "iot:GetPolicy",
+                "iot:DeletePolicy",
+                "iot:ListTagsForResource",
+                "iot:ListPolicyVersions",
+                "iot:CreatePolicyVersion"
+            ],
+            "Resource": "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:policy/*",
+            "Effect": "Allow"
+        },
+        {
+            "Action": [
+                "lambda:CreateFunction",
+                "lambda:GetFunction",
+                "lambda:ListVersionsByFunction",
+                "lambda:GetFunctionCodeSigningConfig",
+                "lambda:AddPermission",
+                "lambda:GetPolicy",
+                "lambda:RemovePermission",
+                "lambda:DeleteFunction",
+                "lambda:GetRuntimeManagementConfig",
+                "lambda:UpdateFunctionCode",
+                "lambda:UpdateFunctionConfiguration"
+            ],
+            "Resource": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:*",
+            "Effect": "Allow"
+        },
+        {
+            "Action": [
+                "iot:DescribeCertificate",
+                "iot:AttachPolicy",
+                "iot:DetachPolicy",
+                "iot:UpdateCertificate",
+                "iot:DeleteCertificate"
+            ],
+            "Resource": "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:cert/*",
+            "Effect": "Allow"
+        },
+        {
+            "Action": [
+                "iot:DescribeProvisioningTemplate",
+                "iot:CreateProvisioningTemplate",
+                "iot:ListTagsForResource",
+                "iot:DeleteProvisioningTemplate",
+                "iot:UpdateProvisioningTemplate"
+            ],
+            "Resource": "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:provisioningtemplate/*",
+            "Effect": "Allow"
+        },
+        {
+            "Action": [
+                "sns:GetTopicAttributes",
+                "sns:CreateTopic",
+                "sns:Subscribe",
+                "sns:ListSubscriptionsByTopic",
+                "sns:ListTagsForResource",
+                "sns:DeleteTopic"
+            ],
+            "Resource": "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:*",
+            "Effect": "Allow"
+        },
+        {
+            "Action": [
+                "iot:DescribeScheduledAudit",
+                "iot:CreateScheduledAudit",
+                "iot:ListTagsForResource",
+                "iot:DeleteScheduledAudit",
+                "iot:UpdateScheduledAudit"
+            ],
+            "Resource": "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:scheduledaudit/*",
+            "Effect": "Allow"
+        },
+        {
+            "Action": [
+                "iot:GetTopicRule",
+                "iot:CreateTopicRule",
+                "iot:DeleteTopicRule"
+            ],
+            "Resource": "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:rule/*",
+            "Effect": "Allow"
+        },
+        {
+            "Action": [
+                "greengrass:DeleteCoreDevice"
+            ],
+            "Resource": "arn:aws:greengrass:${AWS::Region}:${AWS::AccountId}:coreDevices:*",
+            "Effect": "Allow"
+        },
+        {
+            "Action": [
+                "ecr:DescribeImages",
+                "ecr:CompleteLayerUpload",
+                "ecr:UploadLayerPart",
+                "ecr:InitiateLayerUpload",
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:PutImage"
+            ],
+            "Resource": "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/*",
+            "Effect": "Allow"
+        },
+        {
+            "Action": [
+                "greengrass:CreateComponentVersion",
+                "greengrass:ListComponentVersions"
+            ],
+            "Resource": "arn:aws:greengrass:${AWS::Region}:${AWS::AccountId}:components:*",
+            "Effect": "Allow"
+        },
+        {
+            "Action": [
+                "iot:DescribeJob",
+                "iot:CreateJob",
+                "iot:CancelJob"
+            ],
+            "Resource": "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:job/*",
+            "Effect": "Allow"
+        }
+    ]
+}
