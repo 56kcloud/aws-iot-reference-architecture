@@ -31,10 +31,12 @@ How it works:
   4. Expiring certificate is deleted from the device and the AWS cloud
 
 ### Led application
-This is an application in a Docker container that blinks an external led on the Raspberry Pi 4. The frequency could be changed. It communicates in MQTT with AWS IoT Core. Some data is sent: the frequency and the state of the button.
+This application is not essential to the reference architecture. It is used as a demonstration for MQTT communication with AWS IoT. It is an application in a Docker container that blinks an external led on the Raspberry Pi 4. The blinking frequency can be adjusted from an application associated with AWS IoT using the MQTT protocol. Blinking can also be enabled or disabled from the [button application](#button-application). Two pieces of data, the blink frequency and the blink state, are transmitted to AWS IoT so that they can be viewed on an interface.
+
+![Reference architecture](/docs/images/UseCase_Led_Button_Apps.png)
 
 ### Button application
-This is an application in a Docker container that enables or disables led blinking on the Raspberry Pi 4 locally via MQTT. It is activated or deactivated using an external button.
+This application is connected to the [led application](#led-application) while retaining its independence. It is designed as a demonstration of local MQTT communication. Also running in a Docker container, it simply interacts with the [led application](#led-application) to activate or deactivate the blinking of the led. The user presses an external button built into the Raspberry Pi 4 to reverse the blinking state.
 
 ### Corrupt application
 This is an application in a Docker container that print "Corrupt Docker container". It can't print because it's broken. The platform architecture configured (amd64) in the Dockerfile is differente from the target architecture (arm64). It is created to show that the state of health of the device returned to AWS will not be good because of a component malfunction.
@@ -87,7 +89,7 @@ docker_app_1
 **recipe.yaml** is the configuration file required to set up the component. It describes the details of the component, such as its name, version, dependencies, lifecycle scripts, resource requirements, etc.
 
 ### Deployment template
-Before Greengrass components are deployed, a deployment file is generated from the [deployment.json.template](./components/deployment.json.template) template. This file specifies the group of devices to be deployed to and the components to be deployed.
+Before Greengrass components are deployed, a deployment file is generated from the [deployment.json.template](./components/deployment.json.template) template. This file specifies the group of devices to be deployed to and the components to be deployed. If you want to use a specific version of the Greengrass nucleus component, you can add it to the template along with its version. You can also add other components from the AWS public components.
 
 ## Notes
 ⚠️ The structure of the Greengrass components must be as follows:

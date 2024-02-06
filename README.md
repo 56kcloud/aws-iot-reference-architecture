@@ -32,12 +32,12 @@ Cloud-Native IoT Reference Architecture with Arm SystemReady is an open-source p
 
 **Configuring the role and trust policy**
 
-1. Create an IAM role using a custom trust policy as shown in the following file : [*docs/github-oidc/oidc-ref-arch-role.json*](./docs/github-oidc/oidc-ref-arch-role.json).
+2. Create an IAM role using a custom trust policy as shown in the following file : [*docs/github-oidc/oidc-ref-arch-role.json*](./docs/github-oidc/oidc-ref-arch-role.json).
    - Replace ***${AWS::AccountId}*** with your AWS account ID.
    - Replace ***${GitHub::user/organization}*** with the user/organization name of your forked repository.
    - Replace ***${GitHub::repository}*** with the name of your forked repository.
 
-2. Create an IAM policy as shown in the following file : [*docs/github-oidc/oidc-ref-arch-policy.json*](./docs/github-oidc/oidc-ref-arch-policy.json). And attach it to the IAM role.
+3. Create an IAM policy as shown in the following file : [*docs/github-oidc/oidc-ref-arch-policy.json*](./docs/github-oidc/oidc-ref-arch-policy.json). And attach it to the IAM role.
    - Replace ***${AWS::AccountId}*** with your AWS account ID.
    - Replace ***${AWS::Region}*** with the AWS region in which you want to deploy your infrastructure.
 
