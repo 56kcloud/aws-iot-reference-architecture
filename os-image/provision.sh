@@ -112,7 +112,9 @@ echo "Done"
 # Delete all provisioning files
 rm /home/pi/config_parameters.txt
 rm /home/pi/claim.private.pem.key
+rm /greengrass/v2/claim.private.pem.key
 rm /home/pi/claim.pem.crt
+rm /greengrass/v2/claim.pem.crt
 rm /home/pi/config.yaml
 rm -rf /home/pi/GreengrassInstaller
 
