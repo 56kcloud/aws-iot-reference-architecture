@@ -1,3 +1,3 @@
-FROM --platform=linux/amd64 python:latest
+FROM --platform=linux/arm64/v8 python:latest
 
 CMD ["echo", "Corrupt Docker container"]

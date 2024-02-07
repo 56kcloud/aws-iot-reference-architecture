@@ -40,6 +40,9 @@ This application is connected to the [led application](#led-application) while r
 
 ### Corrupt application
 This is an application in a Docker container that print "Corrupt Docker container". It can't print because it's broken. The platform architecture configured (amd64) in the Dockerfile is differente from the target architecture (arm64). It is created to show that the state of health of the device returned to AWS will not be good because of a component malfunction.
+For the application to work correctly, change in Dockerfile :
+
+`--platform=linux/amd64` → `--platform=linux/arm64/v8`
 
 ## OS update
 A component ([os_update](./components/os_update/)) is present for the sole purpose of updating OS features. In its configuration file ([recipe.yaml](./components/os_update/recipe.yaml)), a section is dedicated to the script used to run Linux commands:

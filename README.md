@@ -174,6 +174,15 @@ This workflow ([deploy-apps.yml](.github/workflows/deploy-apps.yml)) takes care 
 
 ⚠️ Don't forget to add the serial numbers of the devices you want to provision to the allow list ([cloud-infrastructure/allowlist.txt](cloud-infrastructure/allowlist.txt)).
 
+To view the list of Greengrass components running on the device, connect via SSH and enter the following command line :
+```
+sudo /greengrass/v2/bin/greengrass-cli component list
+```
+To view the log of a component running on the device, connect via SSH and enter the following command line :
+```
+sudo tail -F /greengrass/v2/logs/COMPONENT_NAME.log
+```
+
 ## Learn more
 - [Pulumi](https://www.pulumi.com)
 - [AWS IoT Core](https://docs.aws.amazon.com/iot/latest/developerguide/what-is-aws-iot.html)
