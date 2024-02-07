@@ -21,7 +21,7 @@ Manifests:
 
             # Write your commands
             apt-get update
-            # shutdown -r now
+            shutdown -r now
           else
             echo "Already updated."
           fi
