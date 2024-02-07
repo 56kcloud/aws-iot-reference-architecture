@@ -6,7 +6,7 @@ ComponentDescription: "This is a component to update OS."
 ComponentPublisher: "{COMPONENT_AUTHOR}"
 ComponentConfiguration:
   DefaultConfiguration:
-    update_no: "/tmp/update_1"
+    update_no: "./update_1"
 Manifests:
   - Platform:
       os: linux
