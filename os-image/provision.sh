@@ -110,13 +110,11 @@ echo "Done"
 
 # ---------------------------- Delete all unused files after provisioning ----------------------------
 # Delete all provisioning files
-rm /home/pi/config_parameters.txt
-rm /home/pi/claim.private.pem.key
-rm /greengrass/v2/claim.private.pem.key
-rm /home/pi/claim.pem.crt
-rm /greengrass/v2/claim.pem.crt
-rm /home/pi/config.yaml
-rm -rf /home/pi/GreengrassInstaller
+rm ./config_parameters.txt
+rm ./claim.private.pem.key
+rm ./claim.pem.crt
+rm ./config.yaml
+rm -rf ./GreengrassInstaller
 
 # Delete self to provision once
 rm "${0}"
