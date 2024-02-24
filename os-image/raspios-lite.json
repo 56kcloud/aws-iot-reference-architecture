@@ -57,7 +57,7 @@
         {
             "type": "file",
             "source": "./provision.sh",
-            "destination": "/etc/init.d/provision.sh"
+            "destination": "/home/pi/provision.sh"
         },
         {
             "type": "shell",

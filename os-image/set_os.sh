@@ -15,6 +15,8 @@ wget -O /etc/init.d/resize2fs_once https://raw.githubusercontent.com/RPi-Distro/
 chmod +x /etc/init.d/resize2fs_once
 systemctl enable resize2fs_once
 
-# Make the init script executable and update them to run at startup
-chmod +x /etc/init.d/provision.sh
-update-rc.d provision.sh defaults
+# Run provision script on first boot
+sed -i -e '$i \sudo bash -c '\''/usr/bin/bash /home/pi/provision.sh > /home/pi/provision.log 2>&1'\'' &\n' "/etc/rc.local"
+
+# Make the provision script executable
+chmod +x /home/pi/provision.sh

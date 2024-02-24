@@ -1,25 +1,12 @@
 #!/bin/bash
 
-### BEGIN INIT INFO
-# Provides:          provision.sh
-# Required-Start:    $remote_fs $syslog
-# Required-Stop:     $remote_fs $syslog
-# Default-Start:     2 3 4 5
-# Default-Stop:      0 1 6
-# Short-Description: Start provisioning on first boot
-# Description:       Install Docker Engine, GGC and provision device on AWS
-### END INIT INFO
-
 # Set up device with fleet provisioning is based on AWS documentation: https://docs.aws.amazon.com/greengrass/v2/developerguide/fleet-provisioning.html#fleet-provisioning-prerequisites
 
 # Giving the device time to boot (second)
-sleep 60
+sleep 30
 
 # Move to user directory where provisioning files are stored
 cd /home/pi
-
-# Save stdout/stderr to a log file
-exec >provision_log.txt 2>&1
 
 # Get serial number of device
 SERIAL_NUMBER=$(cat /proc/cpuinfo | grep Serial | cut -d ' ' -f 2)
@@ -38,8 +25,6 @@ FLEET_TEMPLATE_NAME=$var5
 # ---------------------------- Install Docker Engine ----------------------------
 # Installation of Docker Engine is based on Docker documentation: https://docs.docker.com/engine/install/debian/
 echo "************ Installing Docker... ************"
-# update-alternatives --set iptables /usr/sbin/iptables-legacy
-# update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 # Add Docker's official GPG key
 sudo apt-get update
 sudo apt-get -y install ca-certificates curl gnupg
@@ -110,11 +95,15 @@ echo "Done"
 
 # ---------------------------- Delete all unused files after provisioning ----------------------------
 # Delete all provisioning files
+sleep 60
 rm ./config_parameters.txt
 rm ./claim.private.pem.key
+rm /greengrass/v2/claim.private.pem.key
 rm ./claim.pem.crt
+rm /greengrass/v2/claim.pem.crt
 rm ./config.yaml
 rm -rf ./GreengrassInstaller
 
-# Delete self to provision once
+# Delete provision script to provision once
+sudo sed -i 's|sudo bash -c '\''/usr/bin/bash /home/pi/provision.sh > /home/pi/provision.log 2>&1'\'' &||' "/etc/rc.local"
 rm "${0}"
