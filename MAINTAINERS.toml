@@ -1,0 +1,25 @@
+# AWS IoT Reference Architecture maintainers file
+#
+# This file lists the maintainers of the 56kcloud/aws-iot-reference-architecture project.
+#
+# Its structure is inspired from the maintainers files in the Docker Github
+# repositories. Please see the MAINTAINERS file in docker/opensource for more
+# information.
+
+[maintainers]
+
+# Core maintainers of the project.
+
+    [maintainers.core]
+    people = [
+      "kevax24",
+    ]
+
+[people]
+
+# A reference list of all people associated with the project.
+
+    [people.kevax24]
+    Name = "Xavier Clivaz"
+    Email = "xavier@56k.cloud"
+    GitHub = "kevax24"
